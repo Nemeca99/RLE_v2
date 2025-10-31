@@ -65,6 +65,11 @@ class RLEResult:
     # Micro-scale theta-aware diagnostics
     Gamma: float = 0.0
     log_Gamma: float = 0.0
+    # Substrate diagnostics (dimensionless)
+    Xi_E: float = 0.0
+    Xi_H: float = 0.0
+    Xi_C: float = 0.0
+    Phi_substrate: float = 0.0
 
 @dataclass
 class ControlDecision:
@@ -184,8 +189,8 @@ class RLECore:
         """
         import math
         
-        if not self.enable_micro_scale:
-            return (1.0, 1.0, 1.0, 1.0, 0.0, 0.0)
+        # Note: We compute diagnostics (Gamma, F_q/F_s/F_p) regardless of enable flag,
+        # but only apply F_mu to RLE when enable_micro_scale=True.
         
         # Constants
         k_B = 1.380649e-23  # Boltzmann constant (J/K)
@@ -218,6 +223,9 @@ class RLECore:
         # Geometric mean: all three must agree
         F_mu = (F_q * F_s * F_p) ** (1.0/3.0)
         F_mu = max(1e-9, min(1.0, F_mu))  # Clamp to (0, 1]
+        if not self.enable_micro_scale:
+            # Keep F_mu inert for core path when disabled
+            F_mu = 1.0
         
         # Diagnostics: Gamma and log_Gamma for analysis
         log_Gamma = math.log(max(Gamma, 1e-30)) if Gamma > 0 else -1e9
@@ -391,7 +399,7 @@ class RLECore:
             self._theta_c = (t - self._theta_index) - y
             self._theta_index = t
 
-        # Micro-scale correction (optional Planck-ish penalty)
+        # Micro-scale diagnostics and optional correction
         F_mu, F_q, F_s, F_p, Gamma, log_Gamma = self._compute_micro_scale_factor(power_w, temp_c, dt_s, dtheta, self._t0_s)
         rle_raw_ms = rle_raw_core * F_mu
         # Smooth augmented path independently (does not affect collapse)
@@ -425,6 +433,12 @@ class RLECore:
         T0_s_out = self._t0_s if self.enable_theta_clock else 0.0
         T_sustain_hat = (t_sustain / max(T0_s_out, 1e-6)) if (self.enable_theta_clock and T0_s_out > 0) else 0.0
 
+        # Substrate diagnostics
+        Xi_E = F_q  # energy adequacy per period
+        Xi_H = e_th # hot-path efficiency (thermal)
+        Xi_C = max(0.0, min(1.0, F_s * F_p))  # cold-path/material-like proxy
+        Phi_substrate = (Xi_E * Xi_H * Xi_C) ** (1.0/3.0)
+
         return RLEResult(
             rle_raw=rle_raw_core,
             rle_smoothed=rle_smooth_core,
@@ -454,7 +468,12 @@ class RLECore:
             theta_gap=theta_gap,
             # Micro-scale theta-aware diagnostics
             Gamma=Gamma,
-            log_Gamma=log_Gamma
+            log_Gamma=log_Gamma,
+            # Substrate diagnostics
+            Xi_E=Xi_E,
+            Xi_H=Xi_H,
+            Xi_C=Xi_C,
+            Phi_substrate=Phi_substrate
         )
 
     def _smooth_rle(self, rle_raw: float, override_n: Optional[int] = None) -> float:
@@ -573,11 +592,11 @@ def augment_csv(in_path: Path, out_path: Path, rated_power_w: float, temp_limit_
             if col not in fieldnames:
                 fieldnames.append(col)
 
-        # Add micro-scale diagnostic columns if enabled
-        if enable_micro_scale:
-            for col in ['F_mu', 'F_q', 'F_s', 'F_p', 'Gamma', 'log_Gamma', 'rle_raw_ms', 'rle_smoothed_ms', 'rle_norm_ms', 'rle_raw_uni', 'rle_smoothed_uni', 'rle_norm_uni']:
-                if col not in fieldnames:
-                    fieldnames.append(col)
+        # Add micro-scale and substrate diagnostic columns (append-only; present regardless of enable flag)
+        for col in ['F_mu', 'F_q', 'F_s', 'F_p', 'Gamma', 'log_Gamma', 'Xi_E', 'Xi_H', 'Xi_C', 'Phi_substrate',
+                    'rle_raw_ms', 'rle_smoothed_ms', 'rle_norm_ms', 'rle_raw_uni', 'rle_smoothed_uni', 'rle_norm_uni']:
+            if col not in fieldnames:
+                fieldnames.append(col)
         writer = csv.DictWriter(f_out, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -608,20 +627,23 @@ def augment_csv(in_path: Path, out_path: Path, rated_power_w: float, temp_limit_
             row['rolling_peak'] = f"{res.rolling_peak:.6f}"
             row['collapse'] = res.collapse
             row['alerts'] = res.alerts
-            # Micro-scale diagnostics (experimental)
-            if enable_micro_scale:
-                row['F_mu'] = f"{res.F_mu:.6f}"
-                row['F_q'] = f"{res.F_q:.6f}"
-                row['F_s'] = f"{res.F_s:.6f}"
-                row['F_p'] = f"{res.F_p:.6f}"
-                row['Gamma'] = f"{res.Gamma:.6f}"
-                row['log_Gamma'] = f"{res.log_Gamma:.6f}"
-                row['rle_raw_ms'] = f"{res.rle_raw_ms:.6f}"
-                row['rle_smoothed_ms'] = f"{res.rle_smoothed_ms:.6f}"
-                row['rle_norm_ms'] = f"{res.rle_norm_ms:.6f}"
-                row['rle_raw_uni'] = f"{res.rle_raw_uni:.6f}"
-                row['rle_smoothed_uni'] = f"{res.rle_smoothed_uni:.6f}"
-                row['rle_norm_uni'] = f"{res.rle_norm_uni:.6f}"
+            # Diagnostics always appended; *_ms/*_uni are zero when MS disabled
+            row['F_mu'] = f"{res.F_mu:.6f}"
+            row['F_q'] = f"{res.F_q:.6f}"
+            row['F_s'] = f"{res.F_s:.6f}"
+            row['F_p'] = f"{res.F_p:.6f}"
+            row['Gamma'] = f"{res.Gamma:.6f}"
+            row['log_Gamma'] = f"{res.log_Gamma:.6f}"
+            row['Xi_E'] = f"{res.Xi_E:.6f}"
+            row['Xi_H'] = f"{res.Xi_H:.6f}"
+            row['Xi_C'] = f"{res.Xi_C:.6f}"
+            row['Phi_substrate'] = f"{res.Phi_substrate:.6f}"
+            row['rle_raw_ms'] = f"{res.rle_raw_ms:.6f}"
+            row['rle_smoothed_ms'] = f"{res.rle_smoothed_ms:.6f}"
+            row['rle_norm_ms'] = f"{res.rle_norm_ms:.6f}"
+            row['rle_raw_uni'] = f"{res.rle_raw_uni:.6f}"
+            row['rle_smoothed_uni'] = f"{res.rle_smoothed_uni:.6f}"
+            row['rle_norm_uni'] = f"{res.rle_norm_uni:.6f}"
 
             # Theta clock outputs
             row['T0_s'] = f"{res.T0_s:.3f}"
