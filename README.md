@@ -6,6 +6,61 @@
 
 **RLE** measures hardware efficiency by balancing useful output vs stress, waste, instability, and time-to-burnout. Real-time monitoring for GPU/CPU systems.
 
+## RLE_v2 Highlights
+
+- θ-clock integrated (augmenter default ON) for fully dimensionless time.
+- θ-windows gated (advanced, OFF by default).
+- Diagnostics appended-only: `Xi_E, Xi_H, Xi_C, Phi_substrate`.
+- Compatible with existing dashboards/scripts (append-only schema).
+
+## Quick Start
+
+```bash
+pip install -r requirements.txt
+
+# Augment a CSV (θ-clock ON by default)
+python lab/monitoring/rle_core.py \
+  --in sessions/recent/your_session.csv \
+  --out sessions/recent/your_session_aug.csv
+
+# Optional: enable micro-scale (low-power precision)
+python lab/monitoring/rle_core.py \
+  --in sessions/recent/your_session.csv \
+  --out sessions/recent/your_session_aug_ms.csv \
+  --micro-scale
+
+# Optional: θ-windows (advanced, off by default)
+python lab/monitoring/rle_core.py \
+  --in sessions/recent/your_session.csv \
+  --out sessions/recent/your_session_theta_windows.csv \
+  --theta-windows
+```
+
+New columns (append-only):
+- `T0_s, theta_index, T_sustain_hat, theta_gap`
+- If micro-scale: `Gamma, log_Gamma`
+- Diagnostics: `Xi_E, Xi_H, Xi_C, Phi_substrate`
+- Envelope (diagnostic-only): `rle_raw_sub, rle_smoothed_sub, rle_norm_sub`
+
+## Concepts (Dimensionless Stability Vector)
+
+Each module is a self-contained, dimensionless feedback loop on the shared θ time base:
+
+| Module                 | Domain                    | Output  | Meaning (simplified)                          |
+| ---------------------- | ------------------------- | ------- | --------------------------------------------- |
+| θ-clock / RLE core     | temporal stability        | RLE_θ   | how steady the system’s rhythm is             |
+| Xi_E                   | energy metabolism         | 0→1+    | adequacy of power input vs need               |
+| Xi_H                   | hot-path material flow    | 0→1     | efficiency of heat transfer / resistance path |
+| Xi_C                   | cold-path material return | 0→1     | efficiency of cooling / restitution path      |
+| Φ_substrate            | combined envelope         | 0→1+    | geometric mean — total systemic balance       |
+
+Stability vector: `Ξ(θ) = [ RLE_θ, Xi_E, Xi_H, Xi_C ]` and envelope `Φ_substrate = (Xi_E·Xi_H·Xi_C)^(1/3)`.
+
+Range discipline:
+- `Xi_E` is clamped internally to [0, 2]; `Xi_H, Xi_C` to [0, 1].
+- `Φ_substrate` uses the clamped terms; collapse detection remains on canonical RLE.
+
+
 ## 📁 Structure
 
 ```
