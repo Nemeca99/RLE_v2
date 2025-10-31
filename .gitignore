@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# Specstory history
+.specstory/
+
+# Hardware screenshots (sensitive)
+lab/pc/
+
+# Duplicate directory
+lab/lab/
+
+# Test output
+test_output.txt
+.DS_Store
+
+# Session data (auto-generated)
+lab/sessions/recent/*.csv
+lab/sessions/archive/*
+logs/*.csv
+
+# Synthetic/plot outputs
+lab/sessions/recent/plots/
+lab/sessions/archive/plots/
+
+# Keep structure
+!lab/sessions/recent/.gitkeep
+!lab/sessions/archive/.gitkeep
+!logs/.gitkeep
+
+# Large vendor or tooling directories (avoid committing heavy/unneeded files)
+LibreHardwareMonitor-0.9.4/
+lab/android/app/build/
+ai_training_output/
+lab/ai_training_output/
+lab/releases/**/releases/
+lab/releases/**/reports/
+lab/releases/**/requirements-lock.txt
+
+# Generated media
+*.png
+*.gif
+*.mp4
+
+# Validation reports
+validation_logs/*.md
+validation_logs/*.txt
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.log
+*.tmp
+organize_root.py
+
+# Keep important structure
+!.gitignore
+!.specstory/
+
