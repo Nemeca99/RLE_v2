@@ -54,13 +54,19 @@ class SessionValidator:
                 
                 for i, row in enumerate(reader):
                     try:
-                        # Required columns
-                        util = float(row.get('util_pct', 0))
-                        temp = float(row.get('temp_c', 0)) if row.get('temp_c') else None
-                        power = float(row.get('power_w', 0)) if row.get('power_w') else None
+                        # Required columns (handle empty values)
+                        util_str = row.get('util_pct', '0').strip()
+                        util = float(util_str) if util_str and util_str != '' else 0.0
+                        
+                        temp_str = row.get('temp_c', '').strip()
+                        temp = float(temp_str) if temp_str and temp_str != '' else None
+                        
+                        power_str = row.get('power_w', '').strip()
+                        power = float(power_str) if power_str and power_str != '' else None
                         
                         # Classical collapse detection (existing)
-                        collapse = 1 if row.get('collapse', '0').strip() in ['1', '1.0'] else 0
+                        collapse_str = row.get('collapse', '0').strip()
+                        collapse = 1 if collapse_str in ['1', '1.0'] else 0
                         
                         self.samples.append({
                             'index': i,
